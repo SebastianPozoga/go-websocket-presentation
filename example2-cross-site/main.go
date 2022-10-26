@@ -3,12 +3,9 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 )
-
-var addr = flag.String("addr", ":8080", "http/https service address")
 
 func serveHome(w http.ResponseWriter, r *http.Request) {
 	log.Println(r.URL)
@@ -32,20 +29,31 @@ func main() {
 	hub := newHub()
 	go hub.run()
 
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/", serveHome)
+		mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+			serveWs(hub, w, r)
+		})
+		server := &http.Server{
+			Addr:      ":8080",
+			Handler:   mux,
+			TLSConfig: &tls.Config{},
+		}
+		if err = server.ListenAndServeTLS("./cert/cert.pem", "./cert/key.pem"); err != nil {
+			log.Fatal("ListenAndServe: ", err)
+		}
+	}()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", serveHome)
-	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		serveWs(hub, w, r)
-	})
-
 	server := &http.Server{
-		Addr:      *addr,
+		Addr:      ":8081",
 		Handler:   mux,
 		TLSConfig: &tls.Config{},
 	}
-	fmt.Println("start")
-	err = server.ListenAndServeTLS("./cert/cert.pem", "./cert/key.pem")
-	if err != nil {
+	if err = server.ListenAndServeTLS("./cert/cert.pem", "./cert/key.pem"); err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
+
 }
